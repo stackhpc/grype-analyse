@@ -141,7 +141,10 @@ def find_used_ignores(grype_output):
 
 
 class Rule:
-    # TODO: DOCUMENT WHAT IT MATCHES ON!
+    """ A representation of a Grype ignore rule which can be used as a set element.
+        Only fields `vulnerability`, `package.location` and `package.name` are
+        considered when hashing.
+    """
     def __init__(self, d):
         self.d = d
         self._key = self.rule_toset(d)
@@ -155,6 +158,7 @@ class Rule:
         return self._key == other._key
 
     def __str__(self):
+        """ Return something like the original yaml rule definition """
         return yaml.dump([dict((k, v) for (k, v) in self.d.items() if k != '__fixme__')]).strip()
 
     def __lt__(self, other):
