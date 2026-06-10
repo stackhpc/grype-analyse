@@ -216,7 +216,7 @@ def main():
 
     # Create output:
     if critical:
-        print(f"ERROR: {len(critical)} critical vulnerabiliies were not ignored:\n")
+        print(f"ERROR: {len(critical)} critical vulnerabilies were not ignored:\n")
         table = []
         for cve in critical:
             item = critical[cve]
