@@ -162,29 +162,40 @@ def main():
 
     output = load_grype_output(args.input)
     matches = output.get("matches", [])
-    print(f"INFO: Loaded {len(matches)} matches")
+    print(f"Loaded {len(matches)} vulnerability matches from {args.input}")
 
     if args.config is not None:
         
         config = load_config(args.config)
 
         # TODO: hide all this and only show if non-zero:
-        ignore = set()
+        ignore_ok = set()
+        ignore_fixme = set()
         for e in config.get("ignore", []):
             r = Rule(e)
-            ignore.add(r)
-
-        ignored = set()
+            if '__fixme__' in e:
+                ignore_fixme.add(r)
+            else:
+                ignore_ok.add(r)
+        print(f"Loaded {len(ignore_ok)} normal ignore rules from {args.config}")
+        print(f"Loaded {len(ignore_fixme)} ignore rules tagged FIXME from {args.config}")
+        
+        used_ignored = set()
         for e in output.get("ignoredMatches", []):
             for d in e["appliedIgnoreRules"]:
                 r = Rule(d)
-                ignored.add(r)
+                used_ignored.add(r)
 
-        unused_ignores = ignore - ignored
+        unused_ignores = (ignore_ok |ignore_fixme)  - used_ignored
         print(f"INFO: {len(unused_ignores)} unused ignore rules found:")
         for r in unused_ignores:
             print(r)
         print()
+
+        used_fixme_ignores = used_ignored & ignore_fixme
+        print(f"WARNING: {len(used_fixme_ignores)} ignore rules tagged FIXME were used:")
+        for r in used_fixme_ignores:
+            print(r)
         
     # Find critical CVEs, deduplicating info
     critical = group_by_cve(matches)
