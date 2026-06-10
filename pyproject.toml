@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "grype-analyse"
+description = "Analyse Grype vulnerability scanner output"
+readme = "README.md"
+requires-python = ">=3.8"
+dynamic = ["version"]
+dependencies = [
+    "tabulate",
+    "PyYAML"
+]
+
+[project.scripts]
+grype-analyse = "grype_analyse.grype_analyse:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+version_file = "src/grype_analyse/_version.py"
