@@ -119,10 +119,26 @@ class SafeFixmeLoader(yaml.SafeLoader):
             mapping['__fixme__'] = self.fixmes[lno - 1]
         return mapping
 
-def load_config(path):
-    with open(path) as f:
+def load_ignores(config_path):
+    with open(config_path) as f:
         data = yaml.load(f, Loader=SafeFixmeLoader)
-    return data
+    all_ignores = set()
+    fixme_ignores = set()
+    for e in data.get("ignore", []):
+        r = Rule(e)
+        all_ignores.add(r)
+        if '__fixme__' in e:
+            fixme_ignores.add(r)
+    return dict(all_ignores=all_ignores, fixme_ignores=fixme_ignores)
+
+def find_used_ignores(grype_output):
+    used_ignores = set()
+    for e in grype_output.get("ignoredMatches", []):
+        for d in e["appliedIgnoreRules"]:
+            r = Rule(d)
+        used_ignores.add(r)
+    return used_ignores
+
 
 class Rule:
     # TODO: DOCUMENT WHAT IT MATCHES ON!
@@ -140,6 +156,11 @@ class Rule:
 
     def __str__(self):
         return yaml.dump([dict((k, v) for (k, v) in self.d.items() if k != '__fixme__')]).strip()
+
+    def __lt__(self, other):
+        if not isinstance(other, Rule):
+            return NotImplemented
+        return self._key < other._key
 
     @classmethod
     def rule_toset(cls, d):
@@ -166,43 +187,32 @@ def main():
 
     if args.config is not None:
         
-        config = load_config(args.config)
+        ignores = load_ignores(args.config)
 
-        # TODO: hide all this and only show if non-zero:
-        ignore_ok = set()
-        ignore_fixme = set()
-        for e in config.get("ignore", []):
-            r = Rule(e)
-            if '__fixme__' in e:
-                ignore_fixme.add(r)
-            else:
-                ignore_ok.add(r)
-        print(f"Loaded {len(ignore_ok)} normal ignore rules from {args.config}")
-        print(f"Loaded {len(ignore_fixme)} ignore rules tagged FIXME from {args.config}")
+        print(f"Loaded {len(ignores["all_ignores"])} ignore rules including {len(ignores["fixme_ignores"])} tagged FIXME from {args.config}")
         
-        used_ignored = set()
-        for e in output.get("ignoredMatches", []):
-            for d in e["appliedIgnoreRules"]:
-                r = Rule(d)
-                used_ignored.add(r)
+        used_ignores = find_used_ignores(output)
+        unused_ignores = ignores["all_ignores"]  - used_ignores
+        if unused_ignores:
+            print()
+            print(f"INFO: {len(unused_ignores)} ignore rules were not used:")
+            for r in sorted(unused_ignores):
+                print(r)
+            print()
 
-        unused_ignores = (ignore_ok |ignore_fixme)  - used_ignored
-        print(f"INFO: {len(unused_ignores)} unused ignore rules found:")
-        for r in unused_ignores:
-            print(r)
-        print()
-
-        used_fixme_ignores = used_ignored & ignore_fixme
-        print(f"WARNING: {len(used_fixme_ignores)} ignore rules tagged FIXME were used:")
-        for r in used_fixme_ignores:
-            print(r)
+        used_fixme_ignores = used_ignores & ignores["fixme_ignores"]
+        if used_fixme_ignores:
+            print(f"WARNING: {len(used_fixme_ignores)} ignore rules tagged FIXME were used:")
+            for r in sorted(used_fixme_ignores):
+                print(r)
+            print()
         
     # Find critical CVEs, deduplicating info
     critical = group_by_cve(matches)
 
     # Create output:
     if critical:
-        print(f"ERROR: {len(critical)} critical vulnerabilities found:\n")
+        print(f"ERROR: {len(critical)} critical vulnerabiliies were not ignored:\n")
         table = []
         for cve in critical:
             item = critical[cve]
@@ -212,9 +222,7 @@ def main():
             table.append(entry)
         print(tabulate(table, ["CVE", "Native IDs", "Locations"]))
 
-    if critical:
-        print()
-        sys.exit(f"{len(critical)} critical vulnerabilities found.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
