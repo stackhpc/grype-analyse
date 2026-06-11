@@ -17,8 +17,8 @@ from tabulate import tabulate
 from dataclasses import dataclass
 import yaml
 from io import StringIO
-import pprint
-
+import os
+import requests
 
 @dataclass(frozen=True)
 class Package:
@@ -174,6 +174,28 @@ class Rule:
         name = pkg.get("name", "")
         return (vuln, locn or name)
     
+def check_run(name, summary, title, conclusion, matrix=None):
+    # conclusion: action_required,failure,neutral,success
+    url = f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}/check-runs"
+    headers = {
+        "Authorization": f"token {os.environ['GITHUB_TOKEN']}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    json = {
+        "name": f"[{matrix}] {name}" if matrix else name,
+        "head_sha": os.environ["GITHUB_SHA"],
+        "status": "completed",
+        "conclusion": conclusion,
+        "output": {
+            "title": title,
+            "summary": summary,
+        },
+    }
+    if os.environ.get('DEBUG'):
+        print(dict(url=url, headers=headers, json=json))
+    else:
+        response = requests.post(url, headers=headers, json=json)
+        response.raise_for_status()
 
 def main():
     parser = argparse.ArgumentParser(
@@ -183,7 +205,9 @@ def main():
     )
     parser.add_argument("input", help="Path to grype json-format output")
     parser.add_argument("--config", "-c", help="Path to grype config file")
+    parser.add_argument("--github-checks", "-g", help="Create GitHub check-runs", action="store_true")
     args = parser.parse_args()
+    matrix = os.environ.get('GRYPE_ANALYSE_MATRIX')
 
     output = load_grype_output(args.input)
     matches = output.get("matches", [])
@@ -203,13 +227,22 @@ def main():
             for r in sorted(unused_ignores):
                 print(r)
             print()
-
+            if args.github_checks:    
+                check_run("Grype ignore rules", f"{len(unused_ignores)} unused ignore rules", "title here", "neutral", matrix)
+        elif args.github_checks:    
+            check_run("Grype ignore rules", "No unused ignore rules", "title here", "success", matrix)
+            
         used_fixme_ignores = used_ignores & ignores["fixme_ignores"]
         if used_fixme_ignores:
             print(f"WARNING: {len(used_fixme_ignores)} ignore rules tagged FIXME were used:")
             for r in sorted(used_fixme_ignores):
                 print(r)
             print()
+            if args.github_checks:    
+                check_run("Grype FIXME ignore rules", f"{len(used_fixme_ignores)} ignore rules tagged FIXME used", "title here", "action_required", matrix)
+        elif args.github_checks:    
+            check_run("Grype FIXME ignore rules", f"No ignore rules tagged FIXME used", "title here", "success", matrix)
+        
         
     # Find critical CVEs, deduplicating info
     critical = group_by_cve(matches)
@@ -225,9 +258,11 @@ def main():
             entry = [cve, native_ids, locations]
             table.append(entry)
         print(tabulate(table, ["CVE", "Native IDs", "Locations"]))
-
+        if args.github_checks:
+            check_run("Critical vulnerabilities", f"{len(critical)} critical vulnerabilities were not ignored", "title here", "failure", matrix)
         sys.exit(1)
-
+    elif args.github_checks:
+        check_run("Critical vulnerabilities", f"No critical vulnerabilities were not ignored", "title here", "success", matrix)
 
 if __name__ == "__main__":
     main()

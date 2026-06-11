@@ -10,7 +10,8 @@ requires-python = ">=3.8"
 dynamic = ["version"]
 dependencies = [
     "tabulate",
-    "PyYAML"
+    "PyYAML",
+    "requests",
 ]
 
 [project.scripts]
