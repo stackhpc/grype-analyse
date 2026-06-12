@@ -253,7 +253,7 @@ def main():
         for cve in critical:
             item = critical[cve]
             native_ids = "\n".join(critical[cve]["native_ids"])
-            locations = "\n".join(sorted(flatten(p.locations for p in item["packages"])))
+            locations = "\n".join(sorted(set(flatten(p.locations for p in item["packages"]))))
             entry = [cve, native_ids, locations]
             table.append(entry)
         print(tabulate(table, ["CVE", "Native IDs", "Locations"]))
