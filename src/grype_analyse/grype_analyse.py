@@ -227,10 +227,11 @@ def main():
             for r in sorted(unused_ignores):
                 print(r)
             print()
-            if args.github_checks:    
-                check_run("Grype ignore rules", f"{len(unused_ignores)} unused ignore rules", "title here", "neutral", matrix)
-        elif args.github_checks:    
-            check_run("Grype ignore rules", "No unused ignore rules", "title here", "success", matrix)
+            if args.github_checks:
+                check_run("Grype ignore rules", "Unused ignore rules", "neutral", matrix)
+        if args.github_checks:
+            msg =  f"{len(unused_ignores)} unused ignore rules"
+            check_run("Grype: Unused ignore rules", msg, msg, "neutral" if unused_ignores else "success", matrix)
             
         used_fixme_ignores = used_ignores & ignores["fixme_ignores"]
         if used_fixme_ignores:
@@ -238,11 +239,9 @@ def main():
             for r in sorted(used_fixme_ignores):
                 print(r)
             print()
-            if args.github_checks:    
-                check_run("Grype FIXME ignore rules", f"{len(used_fixme_ignores)} ignore rules tagged FIXME used", "title here", "action_required", matrix)
-        elif args.github_checks:    
-            check_run("Grype FIXME ignore rules", f"No ignore rules tagged FIXME used", "title here", "success", matrix)
-        
+        if args.github_checks:
+            msg = f"{len(used_fixme_ignores)} ignore rules tagged FIXME used"
+            check_run("Grype: FIXME ignore rules", msg, msg, "neutral" if used_fixme_ignores else "success", matrix)
         
     # Find critical CVEs, deduplicating info
     critical = group_by_cve(matches)
@@ -258,11 +257,12 @@ def main():
             entry = [cve, native_ids, locations]
             table.append(entry)
         print(tabulate(table, ["CVE", "Native IDs", "Locations"]))
-        if args.github_checks:
-            check_run("Critical vulnerabilities", f"{len(critical)} critical vulnerabilities were not ignored", "title here", "failure", matrix)
+    if args.github_checks:
+        msg = f"{len(critical)} critical vulnerabilities were not ignored"
+        check_run("Grype: Critical vulnerabilities", msg, msg, "failure" if critical else "success", matrix)
+    
+    if critical:
         sys.exit(1)
-    elif args.github_checks:
-        check_run("Critical vulnerabilities", f"No critical vulnerabilities were not ignored", "title here", "success", matrix)
 
 if __name__ == "__main__":
     main()
