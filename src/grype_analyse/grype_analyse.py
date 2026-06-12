@@ -227,8 +227,6 @@ def main():
             for r in sorted(unused_ignores):
                 print(r)
             print()
-            if args.github_checks:
-                check_run("Grype ignore rules", "Unused ignore rules", "neutral", matrix)
         if args.github_checks:
             msg =  f"{len(unused_ignores)} unused ignore rules"
             check_run("Grype: Unused ignore rules", msg, msg, "neutral" if unused_ignores else "success", matrix)
