@@ -174,7 +174,7 @@ class Rule:
         name = pkg.get("name", "")
         return (vuln, locn or name)
     
-def check_run(name, summary, title, conclusion, matrix=None):
+def check_run(name, comment, conclusion, matrix=None):
     # conclusion: action_required,failure,neutral,success
     url = f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}/check-runs"
     headers = {
@@ -187,15 +187,19 @@ def check_run(name, summary, title, conclusion, matrix=None):
         "status": "completed",
         "conclusion": conclusion,
         "output": {
-            "title": title,
-            "summary": summary,
+            "title": comment,
+            "summary": comment,
         },
     }
     if os.environ.get('DEBUG'):
         print(dict(url=url, headers=headers, json=json))
     else:
         response = requests.post(url, headers=headers, json=json)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError:
+            print(response.json())
+            raise
 
 def main():
     parser = argparse.ArgumentParser(
@@ -227,9 +231,6 @@ def main():
             for r in sorted(unused_ignores):
                 print(r)
             print()
-        if args.github_checks:
-            msg =  f"{len(unused_ignores)} unused ignore rules"
-            check_run("Grype: Unused ignore rules", msg, msg, "neutral" if unused_ignores else "success", matrix)
             
         used_fixme_ignores = used_ignores & ignores["fixme_ignores"]
         if used_fixme_ignores:
@@ -237,10 +238,7 @@ def main():
             for r in sorted(used_fixme_ignores):
                 print(r)
             print()
-        if args.github_checks:
-            msg = f"{len(used_fixme_ignores)} ignore rules tagged FIXME used"
-            check_run("Grype: FIXME ignore rules", msg, msg, "neutral" if used_fixme_ignores else "success", matrix)
-        
+
     # Find critical CVEs, deduplicating info
     critical = group_by_cve(matches)
 
@@ -255,10 +253,30 @@ def main():
             entry = [cve, native_ids, locations]
             table.append(entry)
         print(tabulate(table, ["CVE", "Native IDs", "Locations"]))
-    if args.github_checks:
-        msg = f"{len(critical)} critical vulnerabilities were not ignored"
-        check_run("Grype: Critical vulnerabilities", msg, msg, "failure" if critical else "success", matrix)
     
+    # Set GitHub check run status:
+    if args.github_checks and args.config is not None:
+        check_run(
+            "Grype: Unused ignore rules",
+            f"{len(unused_ignores)} unused ignore rules",
+            "neutral" if unused_ignores else "success",
+            matrix
+        )
+        check_run(
+            "Grype: FIXME ignore rules",
+            f"{len(used_fixme_ignores)} ignore rules tagged FIXME used",
+            "neutral" if used_fixme_ignores else "success",
+            matrix
+        )
+    if args.github_checks:
+        check_run(
+            "Grype: Critical vulnerabilities",
+            f"{len(critical)} critical vulnerabilities were not ignored",
+            "failure" if critical else "success",
+            matrix
+        )
+
+    # Fail workflow if un-ignored critical:
     if critical:
         sys.exit(1)
 
