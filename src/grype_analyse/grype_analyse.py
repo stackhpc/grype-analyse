@@ -26,10 +26,6 @@ class Package:
     type: str
 
 
-# Package types where the location is the package database, not the package:
-OS_PACKAGE_TYPES = {"rpm", "deb", "apk", "alpm", "portage"}
-
-
 def load_grype_output(path):
     with open(path) as f:
         data = json.load(f)
@@ -94,31 +90,6 @@ def group_by_cve(matches):
             loc.get("path", "?") for loc in artifact.get("locations", [])
         )
     return groups
-
-def suggest_ignore_rules(critical):
-    """ Return yaml text for ignore rules which would suppress the given critical vulnerabilities.
-        OS packages are matched by name, as their location is the package database,
-        others by location.
-    """
-    lines = []
-    seen = set()
-    for item in critical.values():
-        for pkg, info in item["packages"].items():
-            comment = f"# FIXME: {pkg.name} {pkg.version}"
-            for native in sorted(info["native_ids"]):
-                if pkg.type in OS_PACKAGE_TYPES:
-                    packages = [{"name": pkg.name}]
-                else:
-                    packages = [{"location": loc} for loc in sorted(info["locations"])]
-                for package in packages:
-                    rule = {"vulnerability": native, "package": package}
-                    rule_key = Rule(rule)
-                    if rule_key in seen:
-                        continue
-                    seen.add(rule_key)
-                    lines.append(comment)
-                    lines.append(yaml.dump([rule], sort_keys=False).strip())
-    return "\n".join(lines)
 
 class SafeFixmeLoader(yaml.SafeLoader):
     """ Reads yaml, adds __fixme__ entries for elements preceeded by FIXME: comments """
@@ -277,9 +248,6 @@ def main():
                 entry = [cve if i == 0 else "", native_ids, f"{pkg.name} {pkg.version}", locations]
                 table.append(entry)
         print(tabulate(table, ["CVE", "Native IDs", "Package", "Locations"]))
-        print()
-        print("Suggested ignore rules IF review shows they can be suppressed:\n")
-        print(suggest_ignore_rules(critical))
     
     # Set GitHub check run status:
     if args.github_checks and args.config is not None:
