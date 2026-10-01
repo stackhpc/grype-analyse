@@ -168,7 +168,7 @@ class Rule:
 
     @classmethod
     def rule_toset(cls, d):
-        vuln = d.get("vulerability", "")
+        vuln = d.get("vulnerability", "")
         pkg = d.get("package", {})
         locn = pkg.get("location", "")
         name = pkg.get("name", "")
