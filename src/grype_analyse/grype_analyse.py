@@ -12,7 +12,6 @@ Return code is 1 if critical vulnerabilities found.
 import sys
 import json
 import argparse
-from itertools import chain
 from tabulate import tabulate
 from dataclasses import dataclass
 import yaml
@@ -25,11 +24,10 @@ class Package:
     name: str
     version: str
     type: str
-    locations: tuple
 
 
-def flatten(nested):
-    return list(chain.from_iterable(nested))
+# Package types where the location is the package database, not the package:
+OS_PACKAGE_TYPES = {"rpm", "deb", "apk", "alpm", "portage"}
 
 
 def load_grype_output(path):
@@ -56,7 +54,7 @@ def group_by_cve(matches):
     """
     Group critical matches. Returns a dict:
         key: CVE where available or native ID if missing.
-        value: {native_ids: [], packages: [], ...}
+        value: {native_ids: set, packages: {Package: {native_ids: set, locations: set}}, ...}
     """
     groups = {}
     for m in matches:
@@ -73,28 +71,54 @@ def group_by_cve(matches):
             name=artifact.get("name", "?"),
             version=artifact.get("version", "?"),
             type=artifact.get("type", "?"),
-            locations=tuple(
-                loc.get("path", "?") for loc in artifact.get("locations", [])
-            ),
         )
 
         if key not in groups:
-            fix_versions = vuln.get("fix", {}).get("versions", [])
             groups[key] = {
                 "key": key,
                 "severity": severity,
                 "description": vuln.get("description", ""),
-                "fix": ", ".join(fix_versions) if fix_versions else "none",
                 "urls": vuln.get("urls", []),
                 "native_ids": set(),
-                "packages": set(),
+                "packages": {},
             }
 
         # Collect every distinct native advisory ID seen for this CVE
         groups[key]["native_ids"].add(native)
 
-        groups[key]["packages"].add(pkg)
+        # Collect native IDs and locations per package, so e.g. the same Go
+        # stdlib version in several binaries is reported once:
+        pkg_info = groups[key]["packages"].setdefault(pkg, {"native_ids": set(), "locations": set()})
+        pkg_info["native_ids"].add(native)
+        pkg_info["locations"].update(
+            loc.get("path", "?") for loc in artifact.get("locations", [])
+        )
     return groups
+
+def suggest_ignore_rules(critical):
+    """ Return yaml text for ignore rules which would suppress the given critical vulnerabilities.
+        OS packages are matched by name, as their location is the package database,
+        others by location.
+    """
+    lines = []
+    seen = set()
+    for item in critical.values():
+        for pkg, info in item["packages"].items():
+            comment = f"# FIXME: {pkg.name} {pkg.version}"
+            for native in sorted(info["native_ids"]):
+                if pkg.type in OS_PACKAGE_TYPES:
+                    packages = [{"name": pkg.name}]
+                else:
+                    packages = [{"location": loc} for loc in sorted(info["locations"])]
+                for package in packages:
+                    rule = {"vulnerability": native, "package": package}
+                    rule_key = Rule(rule)
+                    if rule_key in seen:
+                        continue
+                    seen.add(rule_key)
+                    lines.append(comment)
+                    lines.append(yaml.dump([rule], sort_keys=False).strip())
+    return "\n".join(lines)
 
 class SafeFixmeLoader(yaml.SafeLoader):
     """ Reads yaml, adds __fixme__ entries for elements preceeded by FIXME: comments """
@@ -247,11 +271,18 @@ def main():
         table = []
         for cve in critical:
             item = critical[cve]
-            native_ids = "\n".join(critical[cve]["native_ids"])
-            locations = "\n".join(sorted(set(flatten(p.locations for p in item["packages"]))))
-            entry = [cve, native_ids, locations]
-            table.append(entry)
-        print(tabulate(table, ["CVE", "Native IDs", "Locations"]))
+            for i, (pkg, info) in enumerate(item["packages"].items()):
+                native_ids = "\n".join(sorted(info["native_ids"]))
+                if pkg.type in OS_PACKAGE_TYPES:
+                    locations = f"({pkg.type})"
+                else:
+                    locations = "\n".join(sorted(info["locations"]))
+                entry = [cve if i == 0 else "", native_ids, f"{pkg.name} {pkg.version}", locations]
+                table.append(entry)
+        print(tabulate(table, ["CVE", "Native IDs", "Package", "Locations"]))
+        print()
+        print("Suggested ignore rules IF review shows they can be suppressed:\n")
+        print(suggest_ignore_rules(critical))
     
     # Set GitHub check run status:
     if args.github_checks and args.config is not None:

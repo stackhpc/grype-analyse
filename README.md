@@ -12,8 +12,8 @@ Grype configuration used for the scan and outputs:
     configuration which did match vulnerabilities, i.e. vulnerabilities
     which need fixing.
 - ERROR messages for any critical vulnerabilities which are not ignored,
-    with a summary of CVE number (where present), "native" IDs and locations
-    with matches.
+    with a summary of CVE number (where present), "native" IDs, packages and
+    locations with matches, followed by suggested ignore rules for them.
 
 So a [Grype configuration](https://oss.anchore.com/docs/reference/grype/configuration/)
 like this:
@@ -39,16 +39,38 @@ INFO: 1 ignore rules were not used:
 WARNING: 1 ignore rules tagged FIXME were used:
 - vulnerability: CVE-2026-27143
 
-ERROR: 1 critical vulnerabiliies were not ignored:
+ERROR: 2 critical vulnerabilies were not ignored:
 
-CVE             Native IDs    Locations
---------------  ------------  --------------------------
-CVE-2026-39821  GO-2026-5026  /usr/bin/apptainer
-                              /usr/bin/ondemand_exporter
+CVE             Native IDs      Package                         Locations
+--------------  --------------  ------------------------------  --------------------------
+CVE-2026-39821  GO-2026-5026    stdlib go1.24.4                 /usr/bin/apptainer
+                                                                /usr/bin/ondemand_exporter
+CVE-2026-17653  CVE-2026-17653  webkit2gtk3-jsc 2.52.5-1.el9_8  (rpm)
+
+Suggested ignore rules IF review shows they can be suppressed:
+
+# FIXME: stdlib go1.24.4
+- vulnerability: GO-2026-5026
+  package:
+    location: /usr/bin/apptainer
+# FIXME: stdlib go1.24.4
+- vulnerability: GO-2026-5026
+  package:
+    location: /usr/bin/ondemand_exporter
+# FIXME: webkit2gtk3-jsc 2.52.5-1.el9_8
+- vulnerability: CVE-2026-17653
+  package:
+    name: webkit2gtk3-jsc
 ```
 
 The "native ID" here is the ID which Grype refers to this by, i.e. what should
 be used in an ignore rule.
+
+For OS packages (e.g. RPMs) the location is just the package database, so
+only the package type is shown, and suggested ignore rules match on package
+name rather than location. Suggested rules are tagged FIXME so they will be
+reported as WARNINGs while in use; remove the FIXME comment if a rule is
+intended to be permanent, e.g. for a false positive.
 
 ## Usage
 
