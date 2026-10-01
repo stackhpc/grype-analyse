@@ -45,7 +45,7 @@ CVE             Native IDs      Package                         Locations
 --------------  --------------  ------------------------------  --------------------------
 CVE-2026-39821  GO-2026-5026    stdlib go1.24.4                 /usr/bin/apptainer
                                                                 /usr/bin/ondemand_exporter
-CVE-2026-17653  CVE-2026-17653  webkit2gtk3-jsc 2.52.5-1.el9_8  (rpm)
+CVE-2026-17653  CVE-2026-17653  webkit2gtk3-jsc 2.52.5-1.el9_8  var/lib/rpm/rpmdb.sqlite
 
 Suggested ignore rules IF review shows they can be suppressed:
 
@@ -67,8 +67,7 @@ The "native ID" here is the ID which Grype refers to this by, i.e. what should
 be used in an ignore rule.
 
 For OS packages (e.g. RPMs) the location is just the package database, so
-only the package type is shown, and suggested ignore rules match on package
-name rather than location. Suggested rules are tagged FIXME so they will be
+suggested ignore rules match on package name rather than location. Suggested rules are tagged FIXME so they will be
 reported as WARNINGs while in use; remove the FIXME comment if a rule is
 intended to be permanent, e.g. for a false positive.
 

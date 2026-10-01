@@ -273,10 +273,7 @@ def main():
             item = critical[cve]
             for i, (pkg, info) in enumerate(item["packages"].items()):
                 native_ids = "\n".join(sorted(info["native_ids"]))
-                if pkg.type in OS_PACKAGE_TYPES:
-                    locations = f"({pkg.type})"
-                else:
-                    locations = "\n".join(sorted(info["locations"]))
+                locations = "\n".join(sorted(info["locations"]))
                 entry = [cve if i == 0 else "", native_ids, f"{pkg.name} {pkg.version}", locations]
                 table.append(entry)
         print(tabulate(table, ["CVE", "Native IDs", "Package", "Locations"]))
