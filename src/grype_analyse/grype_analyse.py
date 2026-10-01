@@ -135,8 +135,7 @@ def find_used_ignores(grype_output):
     used_ignores = set()
     for e in grype_output.get("ignoredMatches", []):
         for d in e["appliedIgnoreRules"]:
-            r = Rule(d)
-        used_ignores.add(r)
+            used_ignores.add(Rule(d))
     return used_ignores
 
 
